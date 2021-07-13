@@ -6,8 +6,8 @@ GEM
       minitest (~> 5.1)
       thread_safe (~> 0.3, >= 0.3.4)
       tzinfo (~> 1.1)
-    addressable (2.6.0)
-      public_suffix (>= 2.0.2, < 4.0)
+    addressable (2.8.0)
+      public_suffix (>= 2.0.2, < 5.0)
     coffee-script (2.4.1)
       coffee-script-source
       execjs
@@ -209,10 +209,6 @@ GEM
       mini_portile2 (~> 2.4.0)
     octokit (4.14.0)
       sawyer (~> 0.8.0, >= 0.5.3)
-    octopress-code-highlighter (4.3.0)
-      jekyll (~> 3.0)
-    octopress-codeblock (1.0.5)
-      octopress-code-highlighter (~> 4.2)
     pathutil (0.16.2)
       forwardable-extended (~> 2.6)
     public_suffix (3.1.1)
@@ -249,7 +245,6 @@ DEPENDENCIES
   github-pages (= 197)
   jekyll (= 3.7.4)
   jekyll-paginate
-  octopress-codeblock
 
 BUNDLED WITH
    2.1.0.pre.1
