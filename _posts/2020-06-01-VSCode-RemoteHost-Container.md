@@ -3,7 +3,7 @@ layout: post
 title: "Setup VSCode to use Container on Remote Host"
 ---
 
-> A quick start to use  **container on remote host  ** for development.
+> A quick start to use  **container on remote host ** for development.
 
 # Prepare Remote Host
 ## Install Docker Engine
@@ -21,14 +21,10 @@ On the **remote host** running docker.
     ExecStart=/usr/bin/dockerd
    ```
 3. Reload the daemon and restart:
-
    ```bash
     systemctl daemon-reload
     systemctl restart docker.service 
    ```
-
-
-
 # Prepare Desktop
 
 ## Install Open SSH Client
@@ -38,7 +34,7 @@ Use package manager to install
 1. Download OpenSSH binary for windows from [here](https://github.com/PowerShell/Win32-OpenSSH/releases)
 2. Unzip it to a directory, e.g. C:\OpenSSH
 3. Add C:\OpenSSH to Path environment 
-4. Open **cmd** as administrator, run command
+4. Open **cmd** and run command
    ```bash
    C:> ssh-agent 
    ```
@@ -93,7 +89,7 @@ Choose one of options:
 
 
 ###  Set up docker context
-Open `cmd` as administrator and create docker context
+Run command to  create docker context
 ```bash
 docker context create <context name> --docker "host=ssh://<user>@<host>"
 ```
@@ -105,7 +101,7 @@ verify it works by run:
 ```
 docker info
 ```
-it should output same as running `docker info` on remote host.
+It  should output **same as running `docker info` on remote host**. Here the local docker **just working as a client** connecting to remote docker service.
 
 
 ## Visual Studio Code
@@ -117,10 +113,7 @@ Open VSCode:
 * Extensions -> Search Remote -> Install `Remote Development`
 * Extensions -> Search Remote -> Install `Docker`
 
-### Switch Docker context in VSCode
-Press `ctrl+shift+p` to issue command `docker contexts use` , from prompt list choose the development context created from above.
 
-If the docker client has already setup context to use remote host docker, this step can be ignored.
 
 #  Start Project !
 
@@ -135,26 +128,25 @@ Login remote docker host and then create a empty directory like `~/newprj`, then
 ```dockerfile
 FROM python                                                                
 ENV DEBIAN_FRONTEND=noninteractive 
-ENV HTTP_PROXY "http://web-proxy.ap.softwaregrp.net:8080"                                           
-ENV HTTPS_PROXY "http://web-proxy.ap.softwaregrp.net:8080" 
-RUN mkdir -p /etc/apt && touch /etc/apt/apt.conf \                                                  
-    && echo "Acquire::http::proxy \"http://web-proxy.ap.softwaregrp.net:8080/\";" > /etc/apt/apt.conf \                                                                                                 
-    && echo "Acquire::https::proxy \"http://web-proxy.ap.softwaregrp.net:8080/\";" >> /etc/apt/apt.conf \                                                                                               
-    && apt-get update 
-# Switch back to dialog for any ad-hoc use of apt-get                                               
-ENV DEBIAN_FRONTEND=                 
+apt-get update                
 ```
 
 Run docker command to build the image and start container as daemon.
 ```bash
 docker build . -t <image tag>
-docker run --name <container name> -it  -v ~/newprj:/workspaces/newprj <image tag>
+docker run -d --name <container name> -v ~/newprj:/workspaces/newprj <image tag> tail -f /dev/null
 ```
-**Note:** Attach volume is very necessary to make sure any change in container can  be saved to host's disk.
-**Note: do NOT ** use "-d" to make container running as daemon or VSCode will not attach to it.
+**Note:** Attach volume is very necessary to make sure any change in container can  be saved to host's disk. Here command `tail -f /dev/null` is used to keep container running.
 
 ### Attach to the container
-Open VSCode and `ctrl+shift+p` to issue  command`Remote-Containers:Attach to Running Container...`, select the name of container just created above. 
+#### Switch Docker context
+
+Open VSCode and press `ctrl+shift+p` to issue command `docker contexts use` , from prompt list choose the development context created from above.
+
+#### Connect to container
+
+In VSCode press ctrl+shift+p to issue command `Remote-Containers:Attach to Running Container...`, select the name of container just created above. 
+
 Now can open folder/files in container and start python development as usual even no python installed locally or in remote host! Everything is in docker!
 
 There is no any project-related source file locally in this way.
@@ -173,15 +165,17 @@ There is no any project-related source file locally in this way.
 	"workspaceMount": "source=<RemoteHostDir>,target=/workspace,type=bind,consistency=cached",
 }
 ```
-Here the <RemoteHostDir> is the absolute directory of remote host  to mount when container starts, e.g. `/home/demo/newproj`. Please note it is impossble to mount local file system.
+Here the <RemoteHostDir> is the absolute directory of remote host  to mount when container starts, e.g. `/home/demo/newproj`. Please note it is impossible to mount local file system.
 ### Make project in Remote Host
 ```bash
 mkdir /home/demo/newproj
 ```
 ### Open in Remote Container
+Switch Docker context as in option 1.
+
 Open VSCode, `File`->`Open Folder...`, choose the local folder contains above `devcontainer/devcontainer.json`.
 
-Because devcontainer.json file configed, VSCode will prompt asking if open in remote container, just click "yes" it will **automatically** build, start and attach container on remote host!
+Because devcontainer.json file configed, VSCode will smartly prompt asking if open in remote container, just click "yes" it will **automatically** build, start and attach container on the remote host!
 
 In this way, it has Dockerfile and VS config locally but other source code remotely. Files may have to be sync from time to time in development.
 

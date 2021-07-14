@@ -1,41 +1,91 @@
 ---
 layout: post
-title: "Build Docker Image In Jenkins Running On Kubernetes"
+title: "Not trivial: Build Docker Image In Jenkins Running On Kubernetes"
 ---
 
-> Just the best way to build docker image in Jenkins pipeline on K8S
+> Just the best way to build docker image in Jenkins pipeline on K8S?
 
 
 
 # Background
 
-Running Jenkins job in Pod of K8S is a very popular  solution for CI. In my production environment,  it has K8S cluster and  [Jeninks Kubernetes Plugin](https://github.com/jenkinsci/kubernetes-plugin) connecting to it.  
+Running Jenkins job in Pod of K8S is a very popular  solution for CI. In my environment,  it has K8S cluster and  [Jeninks Kubernetes Plugin](https://github.com/jenkinsci/kubernetes-plugin) connecting to it.  
 
 By using pod template provided by that plug-in, whenever a jenkins pipeline job starts, a temporary slave pod being created for it, then destroyed automatically after job finishes. 
 
 This works pretty well. First of all, It saves resources by replying on K8S to dynamically allocate them. Moreover, to get clean and isolated environments to work, a jenkins job just need to configure containers on demand. 
 
-# Problem
-
-But things become a bit more complicated when people need to build docker image as well. Originally one solution was adopted is using fixed nodes, in which docker is installed, as jenkins slave. This works but there are downsides:
-
-* Nodes must have docker installed, which is heavy for our environment.
-* No dynamic resource allocation.
-* It breaks our pipeline consistency.
-
-So running docker in container, i.e. docker-in-docker is preferred. After investigation, following solutions were raised.
+But things become a bit more boring  when people need to build docker image. In this articale, I am listing all ways to implement it and will discuss  which one is the best.
 
 
 
-# Use docker:dind
+# Ways to run docker cli in pipeline
+
+
+
+## Solution 1:  Use host node's socket
+
+If the k8s cluster using docker as container  runtime, which means every node will have docker. All containers can use host's docker socket then.
+
+Code example:
+
+```groovy
+podTemplate(
+yaml: """
+apiVersion: v1
+kind: Pod
+spec:
+  volumes:
+  - name: docker-sock
+    hostPath:
+      path: /var/run/docker.dock
+      type: File
+
+  containers:
+  - name: demo
+    image: alpinelinux/docker-cli
+    imagePullPolicy: Always
+    env:
+    - name: DOCKER_HOST
+      value: unix:///var/run/docker.dock
+    command: ["cat"]
+    tty: true
+    volumeMounts:
+    - name: docker-sock
+      mountPath: /var/run/docker.sock
+"""
+) { node(POD_LABEL) {
+    container('demo') {
+        sh """
+            docker pull busybox
+        """
+    }
+}}
+```
+
+#### Pros:
+* Easy to use
+* Use host's docker cache
+
+#### Cons:
+* Must have docker as container runtime, which is heavy. Not work if using other runtime e.g. containerd or cri-o.
+* Cannot customize  docker version in pipeline.
+
+
+
+## Solution 2: Run docker as container (DIND)
+
+
+
+###  docker:dind
 
 Docker provides an official docker-in-docker image in docker hub.  So we can use it directly in podTemplate from jenkins pipeline. 
 
-**Note**: To use docker-in-docker, the container need to be run as privileged.
+**Note**: To use docker-in-docker, the container need to be **run as privileged**.
 
 
 
-## Use Docker In docker:dind
+###  Use docker in docker:dind
 
 Here is the mini code need to run docker-in-docker.
 
@@ -75,9 +125,7 @@ However what if people want to run docker command from other containers in the s
 
 
 
-## Use Docker From Other Containers
-
-### Through TCP Port
+### Share dind to other containers - TCP
 
 By default, docker::dind has `dockerd-entrypoint.sh` as entry-point. 
 
@@ -96,7 +144,7 @@ TLS is boring - to connect to it  the client must provide certificate. Here let'
 
 There are two ways to do it: unset environment variable or overwrite entry-point of `dind`.
 
-#### By Environment
+##### By Environment
 `DOCKER_TLS_CERTDIR` is being used by docker:dind to store tls cert, if set to  empty, then tsl would be disabled automatically. I
 
 In following code, the environment is set to empty and also another new container named `demo`, which uses alpine's **docker-cli** client image, is added into pod.
@@ -138,7 +186,7 @@ spec:
 
 
 
-#### By Custom Entry-Point
+##### By Custom Entry-Point
 
 Remember that default entry-point of docker:dind  is `dockerd-entrypoint.sh`, this script finally call dockerd as a service.
 
@@ -180,7 +228,7 @@ Here port `8989` is set as the docker-daemon's listen port by passing `--host` v
 
 
 
-### Through Unix-Domain Socket
+### Share dind to other containers - Unix Socket
 
 All containers in one pod  are in same host so they can share files in the host. By mounting host's directory and put local socket file there, it is easy to have docker daemon accessible to all containers. Basically here two steps needed:
 
@@ -235,12 +283,12 @@ spec:
 
 Here the code makes `dind` container to listen on unix-domain socket through file `/dind-only/docker.sock` that shared with `demo` container through mounting temporary directory on `/dind-only` .
 
-## TCP vs Unix-Domain Socket
+### TCP vs Unix-Domain Socket ?
 
 There is no big difference. But local socket should have better performance because it is more like read/write local file.
 
 
-# Wait Docker-Daemon Up !
+### Wait Docker-Daemon Up !
 
 So far it looks pretty good. But actually there is a potential problem: 
 
@@ -282,13 +330,13 @@ def docker_host_sock = "unix://${shared_mount_point}/docker.sock"
 
 
 
-# Security !
+### Security !
 
 Running `dind` in privileged mode is **NOT SAFE**. 
 
 By replacing docker:dind by `docker:dind-rootless`, the `dind` container can run as a normal user - this makes it safer.
 
-**Note**:`docker:dind-rootless` need `--experimental` option. So we MUST add it when using.
+**Note**:`docker:dind-rootless` need `--experimental` option.
 
 
 
